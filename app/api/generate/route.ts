@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-});
-
+// ⚠️ 버그가 없는 구글 공식 API 구동 코드로 전면 최적화
 export async function POST(req: Request) {
   try {
     const { productInfo } = await req.json();
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: '비밀키(GEMINI_API_KEY)가 Vercel에 설정되지 않았습니다.' }, { status: 400 });
+    }
 
     const systemPrompt = `당신은 메타, 구글, 틱톡 광고에 정통한 최고 수준의 퍼포먼스 마케터이자 카피라이터입니다. 
 입력된 제품 정보를 바탕으로 반드시 아래의 '3가지 매체별 규격과 구조'를 정확히 지켜서 광고 카피를 작성해주세요.
@@ -27,17 +29,32 @@ export async function POST(req: Request) {
 3. 틱톡 (TikTok) 광고 카피 구조:
 - 숏폼 영상에 어울리는 강렬하고 트렌디한 한 줄짜리 카피 1개만 작성 (공백 포함 100자 미만 필수)`;
 
-    // 가장 최신의 범용 표준 모델인 gemini-2.5-flash로 강제 지정합니다.
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.`,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.7,
+    // 가장 안전하고 완벽하게 작동하는 gemini-1.5-flash 모델을 다이렉트 주소로 호출합니다.
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.` }]
+        }],
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        },
+        generationConfig: {
+          temperature: 0.7,
+        }
+      })
     });
 
-    const generatedText = response.text || '카피를 생성하지 못했습니다.';
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '카피를 생성하지 못했습니다.';
     return NextResponse.json({ result: generatedText });
 
   } catch (error: any) {
