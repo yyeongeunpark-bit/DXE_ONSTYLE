@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-// ⚠️ 수정 포인트: 구글 최신 패키지는 apiKey를 명시적으로 process.env에서 직접 꽂아주어야 인지합니다.
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
@@ -28,9 +27,9 @@ export async function POST(req: Request) {
 3. 틱톡 (TikTok) 광고 카피 구조:
 - 숏폼 영상에 어울리는 강렬하고 트렌디한 한 줄짜리 카피 1개만 작성 (공백 포함 100자 미만 필수)`;
 
-    // ⚠️ 수정 포인트: models.generateContent 구조 호환성 패치
+    // ⚠️ 수정 포인트: 구글 공식 최신 최고사양 모델인 'gemini-2.5-pro'로 변경했습니다.
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-2.5-pro',
       contents: `제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.`,
       config: {
         systemInstruction: systemPrompt,
@@ -38,12 +37,11 @@ export async function POST(req: Request) {
       },
     });
 
-    // 안전하게 텍스트만 추출하기 위한 방어 코드
     const generatedText = response.text || '카피를 생성하지 못했습니다.';
 
     return NextResponse.json({ result: generatedText });
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
-    return NextResponse.json({ error: `제미나이 연결 중 에러가 발생했습니다: ${error.message || ''}` }, { status: 500 });
+    return NextResponse.json({ error: `제미나이 연결 중 에러가 발생했습니다: ${error.message || JSON.stringify(error)}` }, { status: 500 });
   }
 }
