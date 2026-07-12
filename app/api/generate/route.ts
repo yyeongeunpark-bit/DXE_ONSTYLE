@@ -27,9 +27,9 @@ export async function POST(req: Request) {
 3. 틱톡 (TikTok) 광고 카피 구조:
 - 숏폼 영상에 어울리는 강렬하고 트렌디한 한 줄짜리 카피 1개만 작성 (공백 포함 100자 미만 필수)`;
 
-    // ⚠️ 100% 검증된 정식 버전 최고 안정화 모델명으로 확정합니다.
+    // 가장 최신의 범용 표준 모델인 gemini-2.5-flash로 강제 지정합니다.
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       contents: `제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.`,
       config: {
         systemInstruction: systemPrompt,
@@ -38,8 +38,8 @@ export async function POST(req: Request) {
     });
 
     const generatedText = response.text || '카피를 생성하지 못했습니다.';
-
     return NextResponse.json({ result: generatedText });
+
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
     return NextResponse.json({ error: `제미나이 연결 중 에러가 발생했습니다: ${error.message || JSON.stringify(error)}` }, { status: 500 });
