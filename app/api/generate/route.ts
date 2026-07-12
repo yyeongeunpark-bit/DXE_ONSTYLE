@@ -27,20 +27,19 @@ export async function POST(req: Request) {
 3. 틱톡 (TikTok) 광고 카피 구조:
 - 숏폼 영상에 어울리는 강렬하고 트렌디한 한 줄짜리 카피 1개만 작성 (공백 포함 100자 미만 필수)`;
 
-    // ⚠️ 핵심 교정: 구글 v1 REST API 규격에 완벽히 호환되도록 system_instruction 구조를 매핑했습니다.
+    // ⚠️ 핵심 교정: Unknown name 에러를 피하기 위해 지시문과 데이터를 하나의 대화 흐름(contents)으로 묶어 전달합니다.
     const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{ text: `제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.` }]
-        }],
-        // 구글 정식 v1 규격 이름(system_instruction)과 내부 구조를 일치시켰습니다.
-        system_instruction: {
-          parts: [{ text: systemPrompt }]
-        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `${systemPrompt}\n\n제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.` }]
+          }
+        ],
         generationConfig: {
           temperature: 0.7,
         }
