@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 
-// ⚠️ 버그가 없는 구글 공식 API 구동 코드로 전면 최적화
 export async function POST(req: Request) {
   try {
     const { productInfo } = await req.json();
@@ -29,8 +27,8 @@ export async function POST(req: Request) {
 3. 틱톡 (TikTok) 광고 카피 구조:
 - 숏폼 영상에 어울리는 강렬하고 트렌디한 한 줄짜리 카피 1개만 작성 (공백 포함 100자 미만 필수)`;
 
-    // 가장 안전하고 완벽하게 작동하는 gemini-1.5-flash 모델을 다이렉트 주소로 호출합니다.
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    // ⚠️ 핵심 변경점: 주소를 정식 'v1'으로 변경하고, 모델을 최신 'gemini-2.5-flash'로 꽂아줍니다.
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
