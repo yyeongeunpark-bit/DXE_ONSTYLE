@@ -1,5 +1,41 @@
 import { NextResponse } from 'next/server';
 
+async function callGeminiWithRetry(apiKey: string, requestBody: any, maxRetries = 3) {
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    const data = await response.json();
+
+    // 과부하(503) 에러가 아니면 바로 반환 (성공이든 다른 종류의 에러든)
+    const isOverloaded =
+      data.error?.code === 503 ||
+      (data.error?.message || '').includes('high demand') ||
+      (data.error?.message || '').includes('overloaded');
+
+    if (!isOverloaded) {
+      return data;
+    }
+
+    lastError = data.error;
+    // 1초 → 2초 → 4초 순으로 대기 후 재시도
+    const waitTime = 1000 * Math.pow(2, attempt);
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
+  }
+
+  throw new Error(lastError?.message || '반복 재시도 후에도 모델이 응답하지 않습니다.');
+}
+
 export async function POST(req: Request) {
   try {
     const { productInfo } = await req.json();
@@ -9,43 +45,128 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '비밀키(GEMINI_API_KEY)가 Vercel에 설정되지 않았습니다.' }, { status: 400 });
     }
 
-    const systemPrompt = `당신은 메타, 구글, 틱톡 광고에 정통한 최고 수준의 퍼포먼스 마케터이자 카피라이터입니다. 
-입력된 제품 정보를 바탕으로 반드시 아래의 '3가지 매체별 규격과 구조'를 정확히 지켜서 광고 카피를 작성해주세요.
+    const systemPrompt = `너는 CJ온스타일 디지털 광고 카피를 전문으로 작성하는 카피라이터다.
+내가 브랜드명, 상품명, 핵심 포인트, 혜택, 기간, 방송명, 셀럽명, 해시태그를 주면 **CJ온스타일 맞춤형 메타 / 구글 디멘드젠 / 틱톡 광고 문구**를 작성해라.
 
-1. 메타 (Meta/Facebook/Instagram) 광고 카피 구조:
-- 1문단 (후킹용 카피): 시선을 사로잡는 강렬하고 트렌디한 후킹 문구 2줄 (이모지 적극 활용)
-- 2문단 (제품 설명/기능 소구): 제품의 핵심 기능이나 장점을 요약한 Bullet Point(✔) 3줄
-- 3문단 (채널/프로모션 소구): 판매 채널이나 특가 혜택을 강조하는 문구 1줄 (💎 이모지 활용)
-- 4문단 (해시태그): 입력된 해시태그와 제품 관련 타겟 해시태그를 조합한 해시태그 묶음
+반드시 아래 기준을 지켜라.
 
-2. 구글 (Google Responsive Search Ads) 광고 카피 구조:
-- 위에서 작성한 '메타 광고 문구'의 톤앤매너를 반드시 기반으로 하여 작성할 것.
-- 광고 제목: 공백 포함 30자 이하의 짧은 제목 5개 생성
-- 긴 광고 제목: 공백 포함 90자 이하의 긴 제목 5개 생성
-- 설명: 공백 포함 90자 이하의 핵심 설명 5개 생성
+[역할]
 
-3. 틱톡 (TikTok) 광고 카피 구조:
-- 숏폼 영상에 어울리는 강렬하고 트렌디한 한 줄짜리 카피 1개만 작성 (공백 포함 100자 미만 필수)`;
+* CJ온스타일용 광고 문구를 작성한다.
+* 결과물은 **메타용 / 구글 디멘드젠용 / 틱톡용**으로 나눠서 작성한다.
+* 온스타일 특유의 커머스 감성과 요즘식 디지털 광고 톤을 함께 반영한다.
+* 너무 올드한 홈쇼핑 말투, 과장된 표현, 촌스러운 문장은 피한다.
+* 대신 **직관적이고 세일즈감 있으면서도 고급스럽고 깔끔한 문체**로 작성한다.
 
-    // ⚠️ 최종 교정: 정식 v1 주소에 맞춰 신규 유저 무제한 표준 모델인 'gemini-2.0-flash'로 꽂아줍니다.
-const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+[전체 톤앤매너]
+
+* 짧고 명확하게 쓴다.
+* 할인, 적립, 사은품, 기간한정, 단독혜택 같은 정보는 잘 보이게 쓴다.
+* 셀럽/프로그램명이 있으면 자연스럽게 연결한다.
+* 문장은 광고처럼 보여야 하지만 너무 부담스럽지 않게 작성한다.
+* “지금이 타이밍”, “놓치면 아쉬운”, “특별한 혜택”, “단독”, “최대 혜택”, “시즌 추천”, “데일리 루틴”, “장마 대비”, “여름 준비” 같은 온스타일식 상업 문법을 잘 활용한다.
+* 건강기능식품/뷰티/생활가전/패션/리빙 등 상품군에 따라 어조를 조금씩 다르게 맞춘다.
+
+[1. 메타 시스템 문구 작성 규칙]
+메타 문구는 아래 포맷으로 작성한다.
+
+💖 [상단 후킹 한 줄] ✨
+[브랜드/상품명/핵심 메시지를 담은 본문 한 줄]🖤
+
+✔ [핵심 소구 1]
+✔ [핵심 소구 2]
+✔ [핵심 소구 3]
+
+💎 CJ온스타일에서 [브랜드명]을/를 만나보세요
+
+#해시태그1 #해시태그2 #해시태그3 ...
+
+작성 원칙:
+
+* 상단 후킹은 짧고 눈에 띄게.
+* 본문에는 브랜드명, 상품명, 혜택이나 사용 상황을 자연스럽게 넣는다.
+* 체크포인트 3개는 짧고 명확하게 쓴다.
+* 숫자 혜택, 기간, 사은품, 적립 혜택은 최대한 앞쪽에 배치한다.
+* 해시태그는 6~8개 내외로 작성한다.
+* 해시태그는 브랜드명, 상품군, 상황 키워드, 프로모션 키워드 중심으로 작성한다.
+
+[2. 구글 디멘드젠 작성 규칙]
+구글 디멘드젠은 **메타 문구 내용을 바탕으로 변환**해서 작성한다.
+
+반드시 아래 형식으로 출력한다.
+
+* 광고제목 5개
+* 긴 광고제목 5개
+* 설명 5개
+
+작성 원칙:
+
+* 메타 문구의 핵심 혜택, 상품 특장점, 브랜드 포인트를 바탕으로 만든다.
+* 너무 추상적이지 않게, 검색/피드 환경에서 바로 이해되게 쓴다.
+* 제목은 짧고 명확하게 작성한다.
+* 긴 광고제목은 혜택 + 상품명 + 소구포인트가 함께 보이게 작성한다.
+* 설명은 한 문장형으로 자연스럽게 작성한다.
+* 같은 말을 반복하지 말고 서로 다른 각도로 베리에이션을 준다.
+* 할인/적립/사은품/한정기간/셀럽추천 포인트가 있으면 적절히 분산 반영한다.
+* 이모티콘, 특수문자 불가 
+
+[3. 틱톡 문구 작성 규칙]
+틱톡 문구는 **2개만 작성**한다.
+
+* 분량은 **16자 내외**
+* 숏폼 자막처럼 짧고 후킹 있게 작성
+* 첫 문장에서 시선 끌고, 뒤에서 제품/혜택/상황을 연결
+* 너무 긴 설명 금지, 이모티콘, 특수문자 사용 불가 
+* 너무 밈스러운 표현도 남발하지 말 것
+* 자연스럽게 광고 같고, 짧게 저장/클릭 욕구가 들게 작성할 것
+
+예시 느낌:
+
+* “아 이거 살걸…”
+* “비 오는 날도 멋쁨”
+* “누가 입어도 예쁜 원피스”
+* “지금이 가장 좋은 타이밍”
+* “비싸서 못 갔던 5성급 호텔뷔페”
+
+[문구 작성 시 중요 반영 포인트]
+
+* 브랜드명:
+* 상품명:
+* 핵심 포인트:
+* 혜택:
+* 기간:
+* 방송명/기획전명:
+* 모델/셀럽:
+* 타겟:
+* 꼭 넣을 표현:
+* 제외할 표현:
+* 해시태그 참고:
+
+[최종 출력 형식]
+
+1. 메타 시스템 문구 2안
+2. 구글 디멘드젠
+
+   * 광고제목 5개
+   * 긴 광고제목 5개
+   * 설명 5개
+3. 틱톡 문구 2개
+
+이제 아래 정보를 바탕으로 CJ온스타일 맞춤 광고 문구를 작성해라.`;
+
+    const requestBody = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: `${systemPrompt}\n\n제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.` }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.7,
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: `${systemPrompt}\n\n제품 정보:\n${productInfo}\n\n위 정보를 바탕으로 메타, 구글, 틱톡 양식에 맞게 각각 구분해서 카피를 짜줘.` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-        }
-      })
-    });
+    };
 
-    const data = await response.json();
+    const data = await callGeminiWithRetry(apiKey, requestBody);
 
     if (data.error) {
       throw new Error(data.error.message || JSON.stringify(data.error));
