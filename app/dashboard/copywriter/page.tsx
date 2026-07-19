@@ -41,7 +41,19 @@ const initialHistory: HistoryItem[] = [
 export default function CopywriterPage() {
   const [requestText, setRequestText] = useState('');
   const [resultText, setResultText] = useState<PlatformResult | null>(null);
-  const [historyList, setHistoryList] = useState<HistoryItem[]>(initialHistory);
+const [historyList, setHistoryList] = useState<HistoryItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      const savedHistory = localStorage.getItem('copywriter_history');
+      if (savedHistory) {
+        try {
+          return JSON.parse(savedHistory);
+        } catch (e) {
+          console.error("히스토리를 불러오는데 실패했습니다.", e);
+        }
+      }
+    }
+    return initialHistory; // 저장된 게 없으면 기본 닥터포헤어 데이터 노출
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [activeGoogleTab, setActiveGoogleTab] = useState<'demandgen' | 'pmax' | 'aci'>('demandgen');
 
@@ -87,6 +99,11 @@ export default function CopywriterPage() {
       };
 
       setHistoryList([newHistory, ...historyList]);
+      const updated = [newHistory, ...historyList];
+      setHistoryList(updated);
+      
+      // 📍 이 한 줄을 바로 밑에 추가해 주세요!
+      localStorage.setItem('copywriter_history', JSON.stringify(updated));
 
     } catch (error: any) {
       alert(`엔진 파싱 오류: ${error.message}\nAPI 라우트 파일 경로가 app/api/gemini/route.ts에 정상 위치했는지 확인해 주세요.`);
