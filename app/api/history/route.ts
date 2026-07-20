@@ -20,6 +20,9 @@ export async function GET() {
   try {
     const doc = await getDoc();
     const sheet = doc.sheetsByIndex[0]; // 첫 번째 시트 탭
+    
+    // 헤더 로드
+    await sheet.loadHeaderRow();
     const rows = await sheet.getRows();
 
     const history = rows.map((row, index) => {
@@ -64,7 +67,7 @@ export async function POST(req: Request) {
     const doc = await getDoc();
     const sheet = doc.sheetsByIndex[0];
 
-    // 현재 날짜 및 시간 포맷팅
+    // 현재 날짜 및 시간 포맷팅 (예: 2026-07-20 16:05)
     const now = new Date();
     const formattedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
