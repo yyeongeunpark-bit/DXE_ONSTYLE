@@ -1,9 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
+import { 
+  Sparkles, 
+  History, 
+  Copy, 
+  Check, 
+  RefreshCw, 
+  Send, 
+  Layers, 
+  ExternalLink,
+  ChevronRight,
+  AlertCircle
+} from 'lucide-react';
 
-interface PlatformResult {
+interface CopyResults {
   meta1: string;
   meta2: string;
   demandgen: string;
@@ -17,206 +28,327 @@ interface HistoryItem {
   time: string;
   title: string;
   request: string;
-  results: PlatformResult;
+  results: CopyResults;
 }
 
-const initialHistory: HistoryItem[] = [
-  {
-    id: 1,
-    time: "16:10",
-    title: "기획전 안 1",
-    request: "KBO 올스타전 기념\n6/29~상시 99딜(오전 10시) -> 매일 10시 CJ단독 한정수량 9,900원딜\n전 브랜드 통합 최대할인율 50% \n-> 올스타전도 나만의 스타일로 응원즁\n올스타전 기념! 기간한정 9,900원딜 오픈",
-    results: {
-      meta1: "올스타전도 나만의 스타일로 응원 중! ⚾✨\nKBO 올스타전 기념, 오직 CJ온스타일에서만 만나는 역대급 기간 한정 9,900원딜이 오픈했습니다🖤\n\n✔ 매일 오전 10시, CJ단독 한정수량 9,900원 선착순 오픈\n✔ 전 브랜드 통합 최대 50% 압도적인 할인율\n✔ 올스타전을 더 완벽하게 즐기는 나만의 응원 스타일링\n\n💎 CJ온스타일에서 지금 한정 수량 특가를 만나보세요\n#KBO올스타전 #올스타전 #99딜 #한정수량 #CJ온스타일 #단독특가",
-      meta2: "야구팬 주목! 매일 오전 10시가 기다려지는 이유 ⚾✨\nKBO 올스타전 기념 역대급 혜택, 전 브랜드 통합 최대 50% 할인에 한정수량 9,900원 딜까지 완벽 구성🖤\n\n✔ 올스타전 기념 기간한정 9,900원 특별 찬스\n✔ 매일 아침 10시 정각, 선착순 한정 수량 오픈 되니 스피드가 생명",
-      demandgen: "광고 제목 5개\n1. KBO 올스타전 9,900원딜\n2. 매일 10시 CJ단독 한정 특가\n3. 전 브랜드 통합 최대 50% 할인\n4. 올스타전 기념 기간한정 99딜\n5. 나만의 스타일로 올스타전 응원\n\n긴 광고 제목 5개\n1. KBO 올스타전 기념 매일 오전 10시 CJ단독 한정수량 9,900원딜 오픈\n2. 전 브랜드 통합 최대 할인율 50% 올스타전 기념 기간한정 특가 찬스\n3. 올스타전도 나만의 스타일로 응원 중 온스타일 단독 9,900원 선착순 딜\n4. 매일 아침 10시 오픈되는 KBO 올스타전 기념 한정수량 99딜 기획전\n5. 기간 한정 역대급 혜택 전 브랜드 통합 최대 50% 세일 바로가기\n\n설명 5개\n1. 매일 오전 10시, CJ온스타일에서만 만나는 한정수량 9,900원 단독 특가가 진행됩니다.\n2. 전 브랜드 통합 최대 50% 할인율로 올스타전을 나만의 스타일로 완벽하게 준비하세요.\n3. 올스타전 기념 기간한정 9,900원 딜이 오픈되었으니 매일 아침 선착순 기회를 놓치지 마세요.\n4. KBO 올스타전의 열기를 더해줄 역대급 단독 구성과 특별 혜택을 지금 확인해보세요.\n5. 나만의 스타일로 응원하는 야구팬들을 위한 온스타일만의 특별 한정 수량 패키지입니다.",
-      pmax: "구글 PMAX 규격 필드입니다.",
-      aci: "구글 ACI 규격 필드입니다.",
-      tiktok: "올스타전 응원도 나만의 스타일로! 매일 오전 10시 CJ온스타일 단독 한정수량 9,900원딜 오픈! 전 브랜드 통합 최대 50% 할인까지 다 주니까 야구팬이라면 지금 프로필 링크 누르고 선착순 99딜 탑승하세요!"
-    }
-  }
-];
-
 export default function CopywriterPage() {
-  const [requestText, setRequestText] = useState('');
-  const [resultText, setResultText] = useState<PlatformResult | null>(null);
+  const [productInfo, setProductInfo] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<CopyResults | null>(null);
+  const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
-  const [historyList, setHistoryList] = useState<HistoryItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      const savedHistory = localStorage.getItem('copywriter_history');
-      if (savedHistory) {
-        try {
-          return JSON.parse(savedHistory);
-        } catch (e) {
-          console.error("히스토리를 불러오는데 실패했습니다.", e);
-        }
-      }
-    }
-    return initialHistory;
-  });
+  // 1. 페이지 접속 시 구글 시트에서 공유 히스토리 불러오기
+  useEffect(() => {
+    fetchHistory();
+  }, []);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeGoogleTab, setActiveGoogleTab] = useState<'demandgen' | 'pmax' | 'aci'>('demandgen');
-
-  const handleGenerate = async () => {
-    if (!requestText.trim()) return alert('광고 기획 내용을 입력해주세요!');
-    setIsLoading(true);
-
+  const fetchHistory = async () => {
     try {
-      const payload = { brandName: requestText };
-
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || '엔진 API 응답 실패');
+      setHistoryLoading(true);
+      const res = await fetch('/api/history');
+      const data = await res.json();
+      if (data.history) {
+        setHistory(data.history);
       }
-      
-      const data = await response.json();
-      const rawText = data.result;
-
-      const meta1 = rawText.split('===META1===')[1]?.split('===META2===')[0]?.trim() || '추출 실패';
-      const meta2 = rawText.split('===META2===')[1]?.split('===GOOGLE_DEMANDGEN===')[0]?.trim() || '추출 실패';
-      const demandgen = rawText.split('===GOOGLE_DEMANDGEN===')[1]?.split('===TIKTOK===')[0]?.trim() || '추출 실패';
-      const tiktok = rawText.split('===TIKTOK===')[1]?.trim() || '추출 실패';
-
-      const generatedResults: PlatformResult = { 
-        meta1, 
-        meta2, 
-        demandgen, 
-        pmax: demandgen, 
-        aci: demandgen, 
-        tiktok 
-      };
-      
-      setResultText(generatedResults);
-
-      const now = new Date();
-      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      
-      const firstLine = requestText.split('\n')[0] || '';
-      const displayTitle = firstLine.length > 15 ? firstLine.slice(0, 15) + '...' : firstLine || `캠페인 안 ${historyList.length + 1}`;
-
-      const newHistory: HistoryItem = {
-        id: Date.now(),
-        time: timeString,
-        title: displayTitle,
-        request: requestText,
-        results: generatedResults
-      };
-
-      const updated = [newHistory, ...historyList];
-      setHistoryList(updated);
-      localStorage.setItem('copywriter_history', JSON.stringify(updated));
-
-    } catch (error: any) {
-      alert(`엔진 파싱 오류: ${error.message}`);
+    } catch (err) {
+      console.error('히스토리 불러오기 실패:', err);
     } finally {
-      setIsLoading(false);
+      setHistoryLoading(false);
     }
   };
 
-  const handleClearHistory = () => {
-    if (confirm("그동안 저장된 모든 카피 히스토리를 영구히 삭제하시겠습니까?")) {
-      setHistoryList([]);
-      localStorage.removeItem('copywriter_history');
+  // 결과 파싱 함수
+  const parseGeneratedText = (text: string): CopyResults => {
+    const meta1Match = text.match(/===META1===([\s\S]*?)(?====META2===|===GOOGLE_DEMANDGEN===|===TIKTOK===|$)/);
+    const meta2Match = text.match(/===META2===([\s\S]*?)(?====GOOGLE_DEMANDGEN===|===TIKTOK===|$)/);
+    const googleMatch = text.match(/===GOOGLE_DEMANDGEN===([\s\S]*?)(?====TIKTOK===|$)/);
+    const tiktokMatch = text.match(/===TIKTOK===([\s\S]*?)$/);
+
+    const meta1 = meta1Match ? meta1Match[1].trim() : '';
+    const meta2 = meta2Match ? meta2Match[1].trim() : '';
+    const googleText = googleMatch ? googleMatch[1].trim() : '';
+    const tiktok = tiktokMatch ? tiktokMatch[1].trim() : '';
+
+    return {
+      meta1,
+      meta2,
+      demandgen: googleText,
+      pmax: googleText,
+      aci: googleText,
+      tiktok,
+    };
+  };
+
+  // 카피 생성 및 구글 시트 자동 저장
+  const handleGenerate = async () => {
+    if (!productInfo.trim()) {
+      alert('기획 정보를 입력해 주세요.');
+      return;
     }
+
+    setLoading(true);
+    setResults(null);
+
+    try {
+      // 1) Gemini API 호출
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productInfo }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '생성 실패');
+
+      const parsedResults = parseGeneratedText(data.result);
+      setResults(parsedResults);
+
+      // 2) 구글 시트에 저장 API 호출
+      await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request: productInfo,
+          results: parsedResults,
+        }),
+      });
+
+      // 3) 최신 시트 데이터로 히스토리 리스트 갱신
+      fetchHistory();
+
+    } catch (err: any) {
+      alert(`오류가 발생했습니다: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 히스토리 항목 클릭 시 복원
+  const handleSelectHistory = (item: HistoryItem) => {
+    setProductInfo(item.request);
+    setResults(item.results);
+  };
+
+  // 클립보드 복사
+  const handleCopy = (text: string, sectionKey: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedSection(sectionKey);
+    setTimeout(() => setCopiedSection(null), 2000);
   };
 
   return (
-    <div className="flex h-screen w-screen m-0 p-0 bg-gray-100 text-gray-950 overflow-hidden font-sans relative">
-      <div className="w-8/12 h-full flex flex-col border-r border-gray-300 bg-white">
-        <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50/50 flex-shrink-0">
-          <h1 className="text-xl font-extrabold text-gray-900">✍️ 온스타일 멀티 매체 카피라이터 엔진</h1>
-          <Link href="/dashboard" className="text-xs font-bold text-gray-500 border border-gray-300 rounded-lg px-3 py-1.5 bg-white">&larr; 대시보드 메인</Link>
-        </div>
-
-        <div className="h-2/5 p-6 flex flex-col border-b border-gray-200 bg-white flex-shrink-0">
-          <textarea 
-            value={requestText}
-            onChange={(e) => setRequestText(e.target.value)}
-            disabled={isLoading}
-            placeholder="광고 기획 내용을 자유롭게 복사+붙여넣기 하세요."
-            className="w-full flex-1 p-4 bg-gray-50 border border-gray-300 rounded-xl resize-none text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <button 
-            onClick={handleGenerate}
-            disabled={isLoading}
-            className={`mt-4 w-full py-3.5 text-white font-bold rounded-xl shadow-sm transition ${isLoading ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-          >
-            {isLoading ? 'CJ온스타일 가이드라인 검증 조합 중... ⏳' : '실시간 광고 매체별 세트 추출하기 🚀'}
-          </button>
-        </div>
-
-        <div className="flex-1 p-6 flex flex-col bg-gray-50/30 min-h-0 overflow-hidden">
-          <h2 className="text-sm font-black text-gray-500 mb-3 flex-shrink-0">✨ 실무 배치용 매체별 최종 피드셋</h2>
-          <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
-            <div className="border border-blue-200 rounded-xl p-4 flex flex-col bg-white shadow-sm min-h-0">
-              <div className="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md mb-2 w-max">📱 Meta 시스템 (완성형)</div>
-              <div className="flex-1 overflow-y-auto text-xs font-semibold text-gray-800 whitespace-pre-wrap leading-relaxed pr-1 custom-scrollbar">
-                {resultText && resultText.meta1 !== '추출 실패' ? (
-                  <div className="space-y-4">
-                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                      <span className="block text-[10px] text-indigo-600 font-bold mb-1">[1안: 혜택/직관형]</span>
-                      {resultText.meta1}
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                      <span className="block text-[10px] text-indigo-600 font-bold mb-1">[2안: 감성/상황형 또는 셀럽형]</span>
-                      {resultText.meta2}
-                    </div>
-                  </div>
-                ) : "메타 최적화 카피 피드가 표시됩니다."}
-              </div>
+    <div className="flex h-screen bg-[#0B0F17] text-gray-100 font-sans overflow-hidden">
+      {/* 1. 메인 작업 영역 (좌측) */}
+      <div className="flex-1 flex flex-col h-full border-r border-gray-800/60 overflow-y-auto custom-scrollbar">
+        {/* 헤더 */}
+        <header className="px-8 py-6 border-b border-gray-800/60 bg-[#0B0F17]/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 rounded-xl text-pink-400">
+              <Sparkles className="w-5 h-5" />
             </div>
-
-            <div className="border border-amber-200 rounded-xl p-4 flex flex-col bg-white shadow-sm min-h-0">
-              <div className="flex justify-between items-center mb-2 flex-shrink-0">
-                <div className="text-[11px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md w-max">🔍 Google 엔진 통합</div>
-                <div className="flex gap-0.5 bg-gray-100 p-0.5 rounded-md text-[9px] font-bold">
-                  {(['demandgen', 'pmax', 'aci'] as const).map((tab) => (
-                    <button key={tab} onClick={() => setActiveGoogleTab(tab)} className={`px-1.5 py-0.5 rounded-sm capitalize ${activeGoogleTab === tab ? 'bg-white shadow-xs text-gray-900' : 'text-gray-400'}`}>{tab}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto text-xs font-semibold text-gray-800 whitespace-pre-wrap leading-relaxed bg-gray-50 p-3 rounded-lg border pr-1 custom-scrollbar">
-                {resultText && resultText.demandgen !== '추출 실패' ? resultText[activeGoogleTab] : "구글 매체 규격 세트가 표시됩니다."}
-              </div>
-            </div>
-
-            <div className="border border-red-200 rounded-xl p-4 flex flex-col bg-white shadow-sm min-h-0">
-              <div className="text-[11px] font-black text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-md mb-2 w-max">🎵 TikTok 숏폼 카피 (100자 내외)</div>
-              <div className="flex-1 overflow-y-auto text-xs font-semibold text-gray-800 whitespace-pre-wrap leading-relaxed bg-gray-50 p-3 rounded-lg border pr-1 custom-scrollbar">
-                {resultText && resultText.tiktok !== '추출 실패' ? resultText.tiktok : "틱톡 숏폼 자막 카피가 표시됩니다."}
-              </div>
+            <div>
+              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-400">
+                CJ온스타일 AI 카피라이터
+              </h1>
+              <p className="text-xs text-gray-400 mt-0.5">기획안 기반 실시간 매체별 광고 세트 생성기</p>
             </div>
           </div>
+        </header>
+
+        <div className="p-8 max-w-5xl w-full mx-auto space-y-8">
+          {/* 입력 폼 */}
+          <div className="bg-gray-900/50 border border-gray-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl relative group focus-within:border-pink-500/50 transition-all duration-300">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-pink-400" />
+                기획 정보 및 상품 정보 입력
+              </label>
+              <span className="text-xs text-gray-500">행사명, 브랜드, 특가, 단독혜택 등 자유 입력</span>
+            </div>
+            
+            <textarea
+              value={productInfo}
+              onChange={(e) => setProductInfo(e.target.value)}
+              placeholder="예시)&#10;[행사] 온스타일 뷰티바이블&#10;[브랜드] 닥터지&#10;[상품명] 레드 블레미쉬 클리어 수딩 크림 1+1 기획&#10;[혜택] 단독 35% 할인 + 최대 10% 적립금 / 구매 시 선착순 증정"
+              rows={6}
+              className="w-full bg-[#0B0F17]/70 border border-gray-800 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-pink-500/50 resize-none transition"
+            />
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleGenerate}
+                disabled={loading}
+                className="px-6 py-3 bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-medium text-sm rounded-xl transition-all shadow-lg shadow-pink-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>구글 시트에 카피 연동 및 생성 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>실시간 광고 매체별 세트 추출하기</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* 결과 영역 */}
+          {results && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-gray-800/80 pb-4">
+                <h2 className="text-lg font-bold text-gray-200 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  생성된 매체별 광고 카피
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Meta 1안 */}
+                <Card 
+                  title="💖 Meta (1안)" 
+                  content={results.meta1} 
+                  badge="페이스북/인스타그램"
+                  sectionKey="meta1"
+                  copiedSection={copiedSection}
+                  onCopy={handleCopy}
+                />
+
+                {/* Meta 2안 */}
+                <Card 
+                  title="💖 Meta (2안)" 
+                  content={results.meta2} 
+                  badge="변주 버전"
+                  sectionKey="meta2"
+                  copiedSection={copiedSection}
+                  onCopy={handleCopy}
+                />
+
+                {/* Google DemandGen */}
+                <Card 
+                  title="🔍 Google (Demand Gen)" 
+                  content={results.demandgen} 
+                  badge="유튜브/디스커버"
+                  sectionKey="demandgen"
+                  copiedSection={copiedSection}
+                  onCopy={handleCopy}
+                />
+
+                {/* TikTok */}
+                <Card 
+                  title="🎵 TikTok" 
+                  content={results.tiktok} 
+                  badge="숏폼 자막/문구"
+                  sectionKey="tiktok"
+                  copiedSection={copiedSection}
+                  onCopy={handleCopy}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="w-4/12 h-full flex flex-col bg-gray-50 flex-shrink-0">
-        <div className="p-5 border-b border-gray-300 bg-white shadow-sm flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-extrabold text-gray-900">📜 기획 카피 히스토리</h2>
-            <span className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-black">{historyList.length} 건</span>
+      {/* 2. 구글 시트 연동 공유 히스토리 (우측 사이드바) */}
+      <div className="w-80 bg-[#0E131F] h-full flex flex-col border-l border-gray-800/60">
+        <div className="p-5 border-b border-gray-800/60 flex items-center justify-between bg-[#0E131F]/90 backdrop-blur-md">
+          <div className="flex items-center gap-2 text-gray-200 font-semibold text-sm">
+            <History className="w-4 h-4 text-pink-400" />
+            <span>공유 히스토리 (구글 시트)</span>
           </div>
-          {historyList.length > 0 && (
-            <button onClick={handleClearHistory} className="text-[10px] text-red-500 hover:text-red-700 border border-red-200 rounded px-2 py-1 bg-white font-bold transition">전체 비우기</button>
+          <button 
+            onClick={fetchHistory}
+            className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition"
+            title="새로고침"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          {historyLoading ? (
+            <div className="text-center py-10 text-xs text-gray-500 flex flex-col items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-pink-400" />
+              <span>구글 시트 데이터 불러오는 중...</span>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-10 text-xs text-gray-500">
+              저장된 공유 히스토리가 없습니다.
+            </div>
+          ) : (
+            history.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => handleSelectHistory(item)}
+                className="group p-3.5 rounded-xl bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800/60 hover:border-pink-500/30 transition-all duration-200 cursor-pointer relative"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-gray-500 font-mono">{item.time}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-600 group-hover:text-pink-400 group-hover:translate-x-0.5 transition-all" />
+                </div>
+                <h4 className="text-xs font-medium text-gray-300 group-hover:text-white line-clamp-2 leading-relaxed">
+                  {item.title}
+                </h4>
+              </div>
+            ))
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
-          {historyList.map((item) => (
-            <div key={item.id} onClick={() => { setResultText(item.results); setRequestText(item.request); }} className="p-4 bg-white border-2 border-gray-200 hover:border-indigo-500 rounded-xl shadow-sm cursor-pointer transition">
-              <div className="w-full flex justify-between items-center mb-1">
-                <span className="text-xs font-black text-gray-900">{item.title}</span>
-                <span className="text-[10px] font-bold text-gray-400">{item.time}</span>
-              </div>
-              <p className="text-[11px] text-gray-500 truncate border-t pt-1">{item.request}</p>
-            </div>
-          ))}
+      </div>
+    </div>
+  );
+}
+
+// 결과 카드 서브 컴포넌트
+function Card({ 
+  title, 
+  content, 
+  badge, 
+  sectionKey, 
+  copiedSection, 
+  onCopy 
+}: { 
+  title: string; 
+  content: string; 
+  badge: string; 
+  sectionKey: string; 
+  copiedSection: string | null; 
+  onCopy: (text: string, key: string) => void;
+}) {
+  return (
+    <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-5 hover:border-gray-700/80 transition flex flex-col justify-between group">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-gray-200">{title}</h3>
+            <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full border border-gray-700/50">
+              {badge}
+            </span>
+          </div>
+          <button
+            onClick={() => onCopy(content, sectionKey)}
+            className="p-1.5 text-gray-400 hover:text-white bg-gray-800/40 hover:bg-gray-800 border border-gray-700/50 rounded-lg transition text-xs flex items-center gap-1"
+            title="복사하기"
+          >
+            {copiedSection === sectionKey ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-green-400" />
+                <span className="text-[10px] text-green-400">복사됨</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span className="text-[10px]">복사</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="bg-[#0B0F17]/60 border border-gray-800/50 rounded-xl p-4 text-xs text-gray-300 leading-relaxed font-sans whitespace-pre-wrap min-h-[140px]">
+          {content || '생성된 내용이 없습니다.'}
         </div>
       </div>
     </div>
